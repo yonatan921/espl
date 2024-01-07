@@ -34,15 +34,10 @@ char* map(char *array, int array_length, char (*f) (char)){
 
 int main(int argc, char **argv){
     /* TODO: Test your code */
-    int len = 0;
-    char * argument = argv[1];
-    while (argument[len] != '\0'){
-        len ++;
-    }
-    char * mapped = map(*argv + 1, len, my_get);
-    for(int i =0; i < len; i++){
-        printf("%c\n", mapped[i]);
-    }
+    char arr1[] = {'H','E','Y','!'};
+    char* arr2 = map(arr1, 4, xprt);
+    printf("%s\n", arr2);
+    free(arr2);
 }
 
 char my_get(char c){
@@ -54,7 +49,7 @@ char cprt(char c){
     if(regular_char(c)){
         printf("%c\n", c);
     }else{
-        printf(".");
+        printf(".\n");
     }
     return c;
 }
@@ -71,6 +66,6 @@ char decrypt(char c){
     return c;
 }
 char xprt(char c){
-    printf("0x%X\n", c);
+    printf("%X\n", c);
     return c;
 }
