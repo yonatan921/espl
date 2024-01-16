@@ -90,10 +90,11 @@ int main() {
             // Free the memory allocated for mapped
         } else {
             printf("Not Within bounds\n");
+            break;
         }
     }
 
     // Free the final value of carray
-    free(carray);
+    free(mapped);
     return 0;
 }
