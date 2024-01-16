@@ -1,10 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 
 
 int regular_char(char c){
-    return c >= 0x20 && c <= 0x7e;
+    return c > 0x20 && c < 0x7e;
 }
 char my_get(char c);
 /* Ignores c, reads and returns a character from stdin using fgetc. */
@@ -28,7 +27,6 @@ char* map(char *array, int array_length, char (*f) (char)){
     for(int i =0; i < array_length; i++){
         mapped_array[i] = f(array[i]);
     }
-    /* TODO: Complete during task 2.a */
     return mapped_array;
 }
 

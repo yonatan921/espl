@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <limits.h>
 int addr5;
 int addr6;
 
@@ -53,6 +53,19 @@ int secondary(int x)
     printf("Arrays Mem Layout (T1b):\n");
 
     /* task 1 b here */
+    printf("iarray: %p\n", (int*)&iarray);
+    printf("iarray+1: %p\n", (int*)&iarray + 1);
+
+
+    printf("farray: %p\n", (float*)&farray);
+    printf("farray+1: %p\n", (float*)&farray + 1);
+
+    printf("darray: %p\n", (double *)&darray);
+    printf("darray+1: %p\n", (double *)&darray + 1);
+
+    printf("carray: %p\n", (char *)&darray);
+    printf("carray+1: %p\n", (char *)&darray + 1);
+
 
     printf("Pointers and arrays (T1d): ");
 
@@ -95,8 +108,10 @@ void point_at(void *p)
 
     printf("Check long type mem size (T1a):\n");
     /* part of task 1 a here */
-    int  enough ;
-//    if(sizeof(long) >= 0xFFFFFFFF)
+    long l = LONG_MAX;
+    printf("Long num bytes %zu\n", sizeof(l));
+    printf("We know in 32bit machine there are 4 bytes. So the largest dist is 4 bytes 0xffff - 0,"
+           " Therefor long can store dist");
 
 
     printf("- addr0: %p\n", &addr0);

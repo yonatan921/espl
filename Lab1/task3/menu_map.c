@@ -61,6 +61,7 @@ int main() {
             {"Decrypt", &decrypt},
             {NULL, NULL}
     };
+    // Check how many functions there are dynamically.
     int bounds = sizeof(menu) / sizeof(struct fun_desc) - 1;
 
     // Read a line from standard input
@@ -75,6 +76,7 @@ int main() {
             // Check for EOF (Ctrl+D) to exit gracefully
             break;
         }
+        // We need to remove \n
         input[2] = '\0';
         int choose = atoi(input);
 
@@ -85,15 +87,15 @@ int main() {
             printf("DONE.\n\n");
             // Free the old array
             free(carray);
-            // Assign the new array to carray
+            // Assign carry to mapped
             carray = mapped;
-            // Free the memory allocated for mapped
+
         } else {
             printf("Not Within bounds\n");
+            break;
         }
     }
-
-    // Free the final value of carray
+    // No need to free mapped because carry and mapped points to the same place.
     free(carray);
     return 0;
 }
