@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
         }
     }
     if(encoderString == NULL){
-        fprintf(stderr, "Encoder wasn't found");
+        fprintf(stderr, "Encoder wasn't found\n");
         return 1;
     }
 
