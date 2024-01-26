@@ -18,16 +18,13 @@ typedef struct link {
     virus *vir;
 }link;
 
-struct newMenu{
-    char *name;
-    link* (*fun)(link*,FILE*);
-};
+
 
 void PrintHex(FILE* output, unsigned char* buffer,unsigned short length);
 void checkMagicNumber(FILE * input);
 int getSize(FILE* file);
 void list_print(link *virus_list, FILE* oufFile);
-link* list_append(link* virus_list, virus* data);
+link* list_append(link* virus_list, virus* virus1);
 /* Add a new link with the given data to the list (at the end CAN ALSO AT BEGINNING), and return a pointer to the list (i.e., the first link in the list). If the list is null - create a new entry and return a pointer to the entry. */
 void list_free(link *virus_list);
 /* Free the memory allocated by the list. */
@@ -37,7 +34,7 @@ link* load_signatures(link* link);
 link * loadVirusList(FILE * inputFile);
 link *print_signatures(link *list);
 link * detect_viruse_helper (link *list);
-link * fixFile(link *list);
+link * neutralize_virus_helper(link *pLink);
 link* exit_func(link *list);
 void menu_func();
 void detect_virus(char *buffer, unsigned int size, link *virus_list);
@@ -51,7 +48,7 @@ struct fun_desc menu[] = {
         {"Load signatures",  load_signatures},
         {"Print signatures", print_signatures},
         {"Detect viruses",   detect_viruse_helper},
-        {"Fix file",         fixFile},
+        {"Fix file",         neutralize_virus_helper},
         {"Quit",             exit_func},
         {NULL, NULL}
 };
@@ -71,10 +68,7 @@ link* exit_func(link *list){
     exit(EXIT_SUCCESS);
 }
 
-link* fixFile(link *list){
-    printf("not implemented");
-    return list;
-}
+
 
 void PrintHex(FILE* output, unsigned char* buffer,unsigned short length) {
     int i =0;
@@ -146,16 +140,17 @@ void list_free(link *virus_list){
         free(current);
         current = next;
     }
+
+}
+virus* readVirus(FILE* file){
+    virus * vir = malloc(sizeof(virus));
+    fread(&(vir->SigSize), 2, 1, file);
+    fread(vir->virusName, sizeof(char), 16, file);
+    vir->sig = malloc(vir->SigSize);
+    fread(vir->sig, sizeof(unsigned char), vir->SigSize, file);
+    return vir;
 }
 
-virus* readVirus(FILE* file){
-    virus* virus  = malloc(sizeof(struct virus));
-    if(fread(virus,sizeof(char) ,readVirusLen,file)!=0){
-        virus->sig=malloc(virus->SigSize);
-        fread(virus->sig,1,virus->SigSize,file);
-    }
-    return virus;
-}
 void printVirus(virus* virus, FILE* output){
     fprintf(output,"virus name: %s\n", (*virus).virusName);
     fprintf(output,"virus size: %d\n", (*virus).SigSize);
@@ -178,6 +173,7 @@ link* load_signatures(link* link){
     }
     struct link *head = loadVirusList(file);
     fclose(file);
+    free(fileName);
     return head;
 }
 
@@ -188,7 +184,7 @@ link *print_signatures(link *list){
 
 link * loadVirusList(FILE * inputFile){
     int fileSize = getSize(inputFile);
-//    checkMagicNumber(inputFile);
+    checkMagicNumber(inputFile);
     int readBytes = magicNumberSize;
     link * head = NULL;
 
@@ -201,8 +197,8 @@ link * loadVirusList(FILE * inputFile){
     return head;
 }
 
-int min(int a, int b){
-    return (a > b) ? b : a;
+int min(int n, int m){
+    return (n > m) ? n : m;
 }
 
 void detect_virus(char *buffer, unsigned int size, link *virus_list){
@@ -227,16 +223,39 @@ link * detect_viruse_helper (link *list){
     printf("Enter file's name\n");
     fgets(buff, maxFileName, stdin);
     sscanf(buff, "%ms", &fileName);
-    char* suspect = malloc(10000);   // max 10k
+    char* infectedBuffer = malloc(10000);   // max 10k
     FILE* file = fopen(fileName, "r");
-    fgets(suspect, maxFileName, file);
-    detect_virus(suspect, 10000, list);
-    free(suspect);
+    fgets(infectedBuffer, maxFileName, file);
+    detect_virus(infectedBuffer, 10000, list);
+    free(infectedBuffer);
     fclose(file);
+    free(fileName);
     return list;
 }
 
+void neutralize_virus(char *fileName, int signatureOffset){
+    FILE* infected_file = fopen(fileName, "r+");
+    fseek(infected_file, signatureOffset, SEEK_SET);
+    char retCommand = 0xC3;
+    fwrite(&retCommand, 1, 1, infected_file);
+    fclose(infected_file);
+}
 
+link*neutralize_virus_helper(link* pLink){
+    char* tempLocation=malloc(1000);
+    printf("Enter the starting byte index:\n");
+    fgets(tempLocation, 1000, stdin);
+    int initial_location = atoi(tempLocation);
+    printf("Enter the infected file name:\n");
+    char buffFileName[1024];
+    char* infected_file = NULL;
+    fgets(buffFileName, 1024, stdin);
+    sscanf(buffFileName, "%ms", &infected_file);
+    neutralize_virus(infected_file, initial_location);
+    free(tempLocation);
+    free(infected_file);
+    return pLink;
+}
 void menu_func() {
     int userChoice;
     link* virusList=NULL;
