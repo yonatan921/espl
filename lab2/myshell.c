@@ -44,7 +44,7 @@ int main(int argc,char ** argv) {
         if (strcmp(input, "quit") == 0) {
             printf("Exit shell.\n");
             break;
-        } else if (strcmp(input,"cd")==0){
+        } else if (strncmp(input,"cd ", 3)==0){
             char *path_cd = input + 3; // moving the pointer to extract the path after "cd "
             if (chdir(path_cd) == -1) {
                 //chdir:This command returns zero (0) on success.
@@ -73,12 +73,32 @@ void execute(cmdLine *pCmdLine) {
         fprintf(stderr, "Executing command: %s\n", pCmdLine->arguments[0]);
     }
 
+    int result = 1;
+
+    if (strcmp( pCmdLine->arguments[0], "wakeup") == 0) {
+        int pid = atoi(pCmdLine->arguments[1]);
+        result = kill(pid, SIGCONT);
+
+
+    } else if (strcmp( pCmdLine->arguments[0], "nuke") == 0) {
+        int pid = atoi(pCmdLine->arguments[1]);
+        result = kill(pid, SIGINT);
+
+    }
+
+    if (result == 0) {
+        printf("Command '%s' sent successfully to process %s.\n",  pCmdLine->arguments[0], pCmdLine->arguments[1]);
+        return;
+    }
+
+
     processID = fork();
 
     if (processID == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
     }
+
 
     if (processID == 0) { // Child process
         //if input redirect !=null
@@ -93,7 +113,7 @@ void execute(cmdLine *pCmdLine) {
         }
 
         if ((*pCmdLine).outputRedirect != NULL) {
-            int input_file_desc = open((*pCmdLine).outputRedirect, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+            int input_file_desc = open((*pCmdLine).outputRedirect, O_WRONLY | O_CREAT | O_TRUNC);
             if (input_file_desc == -1) {
                 perror("open outputRedirect");
                 _exit(EXIT_FAILURE);
@@ -115,4 +135,6 @@ void execute(cmdLine *pCmdLine) {
             }
         }
     }
+
+
 }
