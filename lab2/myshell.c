@@ -4,15 +4,12 @@
 #include <string.h>
 #include <linux/limits.h>
 #include "LineParser.h"
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
 
 #define STDIN_FAILURE -1
-#define STDOUT_FAILURE -1
-#define MAX_INPUT_SIZE 2048
+#define MAX_SIZE 2048
 
 int debugF=0; // zero means debug off - have to be global , otherwise signatures of the functions will need to change.
 void execute(cmdLine *pCmdLine);
@@ -23,7 +20,7 @@ int main(int argc,char ** argv) {
     }
 
     while (1) {
-        char input[MAX_INPUT_SIZE];
+        char input[MAX_SIZE];
         char cwd[PATH_MAX];
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             printf("Current directory: %s\n", cwd);
@@ -33,14 +30,19 @@ int main(int argc,char ** argv) {
         }
 
         printf("Enter command: ");
-        if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL) {//T0a2
+        if (fgets(input, MAX_SIZE, stdin) == NULL) {//T0a2
             perror("fgets");
             exit(EXIT_FAILURE);
         }
 
         // Remove the newline character at the end
-        input[strcspn(input, "\n")] = '\0';
-
+        size_t input_len = strlen(input);
+        if (input_len > 0 && input[0] == '\n') {
+            continue;
+        }
+        if (input_len > 0 && input[input_len - 1] == '\n') {
+            input[input_len - 1] = '\0';
+        }
         if (strcmp(input, "quit") == 0) {
             printf("Exit shell.\n");
             break;
@@ -52,6 +54,7 @@ int main(int argc,char ** argv) {
                 fprintf(stderr, "cd: %s: Could not found such file or directory \n", path_cd);
             }
         }else{
+
             cmdLine *parsedCmd = parseCmdLines(input);// Parse the input
             execute(parsedCmd);// Execute the command
             freeCmdLines(parsedCmd); // Release resources
@@ -75,8 +78,11 @@ void execute(cmdLine *pCmdLine) {
 
     int result = 1;
 
+    // Signal handling
     if (strcmp( pCmdLine->arguments[0], "wakeup") == 0) {
+
         int pid = atoi(pCmdLine->arguments[1]);
+        printf("%d\n", pid);
         result = kill(pid, SIGCONT);
 
 
@@ -94,6 +100,7 @@ void execute(cmdLine *pCmdLine) {
 
     processID = fork();
 
+
     if (processID == -1) {
         perror("fork");
         exit(EXIT_FAILURE);
@@ -103,12 +110,14 @@ void execute(cmdLine *pCmdLine) {
     if (processID == 0) { // Child process
         //if input redirect !=null
         if((*pCmdLine).inputRedirect != NULL){
-            int input_file_desc = open((*pCmdLine).inputRedirect,O_RDONLY);//open file  with read only access
-                    if (input_file_desc == -1){
-                        perror("open inputRedirect");
-                        exit(EXIT_FAILURE);
-                    }
-            dup2(input_file_desc,STDIN_FAILURE);
+            printf("input");
+            int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR );//open file  with read only access
+            if (input_file_desc == -1){
+                perror("open inputRedirect");
+                exit(EXIT_FAILURE);
+            }
+            printf("here");
+            dup2(input_file_desc,STDIN_FILENO);
             close(input_file_desc);
         }
 
