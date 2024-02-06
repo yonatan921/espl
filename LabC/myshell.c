@@ -105,10 +105,10 @@ void execute(cmdLine *pCmdLine) {
         //if input redirect !=null
         if((*pCmdLine).inputRedirect != NULL){
             int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR);//open file  with read only access
-                    if (input_file_desc == -1) {
-                        perror("open inputRedirect");
-                        exit(EXIT_FAILURE);
-                    }
+            if (input_file_desc == -1) {
+                perror("open inputRedirect");
+                exit(EXIT_FAILURE);
+            }
             if (dup2(input_file_desc, STDIN_FILENO) == -1) {
                 perror("dup2");
                 exit(EXIT_FAILURE);
