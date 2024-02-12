@@ -10,6 +10,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#define TERMINATED  -1
+#define RUNNING 1
+#define SUSPENDED 0
+
 
 #define STDIN_FAILURE -1
 #define STDOUT_FAILURE -1
@@ -17,6 +21,28 @@
 
 int debugF=0; // zero means debug off - have to be global , otherwise signatures of the functions will need to change.
 void execute(cmdLine *pCmdLine);
+typedef struct process{
+    cmdLine* cmd;                         /* the parsed command line*/
+    pid_t pid; 		                  /* the process id that is running the command*/
+    int status;                           /* status of the process: RUNNING/SUSPENDED/TERMINATED */
+    struct process *next;	                  /* next process in chain */
+} process;
+
+void addProcess(process** process_list, cmdLine* cmd, pid_t pid);// Receive a process list (process_list), a command (cmd), and the process id (pid) of the process running the command. Note that process_list is a pointer to a pointer so that we can insert at the beginning of the list if we wish.
+void printProcessList(process** process_list);// print the processes.
+void freeProcessList(process* process_list);// free the memory of the process list.
+void updateProcessList(process **process_list);// update the process list to remove terminated processes.
+void updateProcessStatus(process* process_list, int pid, int status);// update the status of a process in the process list.
+//Implement the following to add some functionality to your process list:
+//
+//    void freeProcessList(process* process_list);: free all memory allocated for the process list.
+//    void updateProcessList(process **process_list);: go over the process list, and for each process check if it is done, you can use waitpid with the option WNOHANG. WNOHANG does not block the calling process, the process returns from the call to waitpid immediately. If no process with the given process id exists, then waitpid returns -1.
+//    In order to learn if a process was stopped (SIGTSTP), resumed (SIGCONT) or terminated (SIGINT), It's highly essential you read and understand how to use waitpid(2) before implementing this function
+//    void updateProcessStatus(process* process_list, int pid, int status): find the process with the given id in the process_list and change its status to the received status.
+//    update void printProcessList(process** process_list);:
+//        Run updateProcessList() at the beginning of the function.
+//        If a process was "freshly" terminated, delete it after printing it (meaning print the list with the updated status, then delete the dead processes).
+
 
 int main(int argc,char ** argv) {
     if ((argc > 1) && (strcmp(argv[1],"-d") == 0)) {
@@ -45,13 +71,17 @@ int main(int argc,char ** argv) {
         if (strcmp(input, "quit") == 0) {
             printf("Exit shell.\n");
             break;
-        } else if (strncmp(input,"cd ", 3)==0){
+        } else if (strncmp(input,"cd ", 3)==0) {
             char *path_cd = input + 3; // moving the pointer to extract the path after "cd "
             if (chdir(path_cd) == -1) {
                 //chdir:This command returns zero (0) on success.
                 // -1 is returned on an error and errno is set appropriately.
                 fprintf(stderr, "cd: %s: Could not found such file or directory \n", path_cd);
             }
+        }else if (strcmp(input, "procs") == 0) {
+            process* process_list = NULL;
+            printf("got here\n");
+            printProcessList(&process_list);
         }else{
             cmdLine *parsedCmd = parseCmdLines(input);// Parse the input
             execute(parsedCmd);// Execute the command
@@ -64,8 +94,106 @@ int main(int argc,char ** argv) {
     return 0;
 }
 
+void addProcess(process** process_list, cmdLine* cmd, pid_t pid){
+    process* newProcess = (process*)malloc(sizeof(process));
+    if(newProcess == NULL){
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    } else {
+        newProcess->cmd = cmd;
+        newProcess->pid = pid;
+        newProcess->status = RUNNING;
+        newProcess->next = *process_list;
+        *process_list = newProcess;
+    }
+}
+
+
+//    update void printProcessList(process** process_list);:
+//        Run updateProcessList() at the beginning of the function.
+//        If a process was "freshly" terminated, delete it after printing it (meaning print the list with the updated status, then delete the dead processes).
+void printProcessList(process** process_list){
+    updateProcessList(process_list);
+    process* current = *process_list;
+    printf("        PID          Command      STATUS\n");
+    int i = 0;
+    while (current != NULL) {
+        char* status=(current->status==RUNNING)?"Running":(current->status==SUSPENDED)?"Suspended":"Terminated";
+//        printf("%d\t%d\t%s\t%s\n", i, current->pid, current->cmd->arguments[0], status);
+       printf("%d        %d        %s        %d\n", i, current->pid, current->cmd->arguments[0], current->status);
+        current = current->next;
+        i++;
+    }
+}
+
+void freeProcessList(process* process_list){
+    process* current = process_list;
+    process* next;
+    while (current != NULL) {
+        next = current->next;
+        freeCmdLines(current->cmd);
+        free(current);
+        current = next;
+    }
+}
+void updateProcessList(process **process_list){
+    process* current = *process_list;
+    process* prev = NULL;
+    while (current != NULL) {
+        int status;
+        int result = waitpid(current->pid, &status, WNOHANG);
+        if (result == -1) {
+            perror("waitpid");
+            exit(EXIT_FAILURE);
+        } else if (result == 0) {
+            prev = current;
+            current = current->next;
+        } else {
+            if (WIFEXITED(status)) {
+                current->status = TERMINATED;
+            } else if (WIFSTOPPED(status)) {
+                current->status = SUSPENDED;
+            } else if (WIFCONTINUED(status)) {
+                current->status = RUNNING;
+            }
+            if (prev == NULL) {
+                *process_list = current->next;
+                freeCmdLines(current->cmd);
+                free(current);
+                current = *process_list;
+            } else {
+                prev->next = current->next;
+                freeCmdLines(current->cmd);
+                free(current);
+                current = prev->next;
+            }
+        }
+    }
+}
+
+void updateProcessStatus(process* process_list, int pid, int status){
+    process* current = process_list;
+    while (current != NULL) {
+        if (current->pid == pid) {
+            current->status = status;
+            break;
+        }
+        current = current->next;
+    }
+}
+
 /*Write a function execute(cmdLine *pCmdLine) that receives a parsed line and
  * invokes the program specified in the cmdLine using the proper system call . */
+
+//Part 2: Implementing a Pipe in the Shell
+//
+//Having learned how to create a pipe between 2 processes/programs in Part 1, we now wish to implement a pipeline inside our own shell. In this part you will extend your shell's capabilities to support pipelines that consist of just one pipe and 2 child processes. That is, support a command line with one pipe between 2 processes resulting from running executable files mentioned in the command line. The scheme uses basically the same mechanism as in part 1, except that now the program to be executed in each child process is determined by the command line.
+//Your shell must be able now to run commands like: ls|wc -l which basically counts the number of files/directories under the current working dir. The most important thing to remember about pipes is that the write-end of the pipe needs to be closed in all processes, otherwise the read-end of the pipe will not receive EOF, unless the main process terminates.
+//
+//Notes:
+//    The line parser automatically generates a list of cmdLine structures to accommodate pipelines. For instance, when parsing the command "ls | grep .c", two chained cmdLine structures are created, representing ls and grep respectively.
+//    Your shell must still support all previous features, including input/output redirection from lab 2. Obviously, it makes no sense to redirect the output of the left--hand-side process (as then nothing goes into the pipe), and this should be considered an error, and likewise redirecting the input of the right-hand-side process is an error (as then the pipe output is hanging). In such cases, print an error message to stderr without generating any new processes. It is important to note that commands utilizing both I/O redirection and pipelines are indeed quite common (e.g. "cat < in.txt | tail -n 2 > out.txt").
+//    As in previous tasks, you must keep your program free of memory leaks.
 void execute(cmdLine *pCmdLine) {
     pid_t processID;
 
@@ -73,6 +201,7 @@ void execute(cmdLine *pCmdLine) {
         fprintf(stderr, "PID: %d\n", getpid());
         fprintf(stderr, "Executing command: %s\n", pCmdLine->arguments[0]);
     }
+
 
     int result = 1;
 
@@ -91,54 +220,153 @@ void execute(cmdLine *pCmdLine) {
         printf("Command '%s' sent successfully to process %s.\n",  pCmdLine->arguments[0], pCmdLine->arguments[1]);
         return;
     }
-
-
-    processID = fork();
-
-    if (processID == -1) {
-        perror("fork");
-        exit(EXIT_FAILURE);
-    }
-
-
-    if (processID == 0) { // Child process
-        //if input redirect !=null
-        if((*pCmdLine).inputRedirect != NULL){
-            int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR);//open file  with read only access
-            if (input_file_desc == -1) {
-                perror("open inputRedirect");
-                exit(EXIT_FAILURE);
-            }
-            if (dup2(input_file_desc, STDIN_FILENO) == -1) {
+    if(pCmdLine->next != NULL){
+        int pipefd[2];
+        if (pipe(pipefd) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+        processID = fork();
+        if (processID == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        if (processID == 0) { // Child process
+            if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
                 perror("dup2");
                 exit(EXIT_FAILURE);
             }
-            close(input_file_desc);
-        }
-
-        if ((*pCmdLine).outputRedirect != NULL) {
-            int input_file_desc = open((*pCmdLine).outputRedirect, O_WRONLY | O_CREAT | O_TRUNC);
-            if (input_file_desc == -1) {
-                perror("open outputRedirect");
-                _exit(EXIT_FAILURE);
+            close(pipefd[1]);
+            close(pipefd[0]);
+            if (execvp((*pCmdLine).arguments[0], pCmdLine->arguments) == -1) {
+                perror("execvp");
+                exit(EXIT_FAILURE);
             }
-            dup2(input_file_desc, STDOUT_FILENO);
-            close(input_file_desc);
-        }
-        if (execvp((*pCmdLine).arguments[0], pCmdLine->arguments) == -1) {
-            perror("execvp");
-            exit(EXIT_FAILURE);
-        }
-    } else { // Parent process
-        //make a parent process wait until one of its child processes terminates.
-        // If blocking is set (no "&" at the end), wait for the child process
-        if((*pCmdLine).blocking){
+        } else { // Parent process
+            close(pipefd[1]);
             if (waitpid(processID, NULL, 0) == -1) {
                 perror("waitpid");
                 exit(EXIT_FAILURE);
             }
+            processID = fork();
+            if (processID == -1) {
+                perror("fork");
+                exit(EXIT_FAILURE);
+            }
+            if (processID == 0) { // Child process
+                if (dup2(pipefd[0], STDIN_FILENO) == -1) {
+                    perror("dup2");
+                    exit(EXIT_FAILURE);
+                }
+                close(pipefd[0]);
+                if (execvp((*pCmdLine).next->arguments[0], pCmdLine->next->arguments) == -1) {
+                    perror("execvp");
+                    exit(EXIT_FAILURE);
+                }
+            } else { // Parent process
+                close(pipefd[0]);
+                if (waitpid(processID, NULL, 0) == -1) {
+                    perror("waitpid");
+                    exit(EXIT_FAILURE);
+                }
+            }
         }
+    }else{
+        processID = fork();
+        if (processID == -1) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+        if (processID == 0) { // Child process
+            //if input redirect !=null
+            if((*pCmdLine).inputRedirect != NULL){
+                int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR);//open file  with read only access
+                if (input_file_desc == -1) {
+                    perror("open inputRedirect");
+                    exit(EXIT_FAILURE);
+                }
+                if (dup2(input_file_desc, STDIN_FILENO) == -1) {
+                    perror("dup2");
+                    exit(EXIT_FAILURE);
+                }
+                close(input_file_desc);
+            }
+
+            if ((*pCmdLine).outputRedirect != NULL) {
+                int input_file_desc = open((*pCmdLine).outputRedirect, O_WRONLY | O_CREAT | O_TRUNC);
+                if (input_file_desc == -1) {
+                    perror("open outputRedirect");
+                    _exit(EXIT_FAILURE);
+                }
+                dup2(input_file_desc, STDOUT_FILENO);
+                close(input_file_desc);
+            }
+            if (execvp((*pCmdLine).arguments[0], pCmdLine->arguments) == -1) {
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            }
+        } else { // Parent process
+            //make a parent process wait until one of its child processes terminates.
+            // If blocking is set (no "&" at the end), wait for the child process
+            if((*pCmdLine).blocking){
+                if (waitpid(processID, NULL, 0) == -1) {
+                    perror("waitpid");
+                    exit(EXIT_FAILURE);
+                }
+            }
+        }
+
     }
+
+
+
+//    processID = fork();
+//
+//    if (processID == -1) {
+//        perror("fork");
+//        exit(EXIT_FAILURE);
+//    }
+//
+//
+//    if (processID == 0) { // Child process
+//        //if input redirect !=null
+//        if((*pCmdLine).inputRedirect != NULL){
+//            int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR);//open file  with read only access
+//            if (input_file_desc == -1) {
+//                perror("open inputRedirect");
+//                exit(EXIT_FAILURE);
+//            }
+//            if (dup2(input_file_desc, STDIN_FILENO) == -1) {
+//                perror("dup2");
+//                exit(EXIT_FAILURE);
+//            }
+//            close(input_file_desc);
+//        }
+//
+//        if ((*pCmdLine).outputRedirect != NULL) {
+//            int input_file_desc = open((*pCmdLine).outputRedirect, O_WRONLY | O_CREAT | O_TRUNC);
+//            if (input_file_desc == -1) {
+//                perror("open outputRedirect");
+//                _exit(EXIT_FAILURE);
+//            }
+//            dup2(input_file_desc, STDOUT_FILENO);
+//            close(input_file_desc);
+//        }
+//        if (execvp((*pCmdLine).arguments[0], pCmdLine->arguments) == -1) {
+//            perror("execvp");
+//            exit(EXIT_FAILURE);
+//        }
+//    } else { // Parent process
+//        //make a parent process wait until one of its child processes terminates.
+//        // If blocking is set (no "&" at the end), wait for the child process
+//        if((*pCmdLine).blocking){
+//            if (waitpid(processID, NULL, 0) == -1) {
+//                perror("waitpid");
+//                exit(EXIT_FAILURE);
+//            }
+//        }
+//    }
+
 
 
 }
