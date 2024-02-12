@@ -27,28 +27,19 @@ typedef struct process{
     int status;                           /* status of the process: RUNNING/SUSPENDED/TERMINATED */
     struct process *next;	                  /* next process in chain */
 } process;
-
+process* process_list = NULL;
 void addProcess(process** process_list, cmdLine* cmd, pid_t pid);// Receive a process list (process_list), a command (cmd), and the process id (pid) of the process running the command. Note that process_list is a pointer to a pointer so that we can insert at the beginning of the list if we wish.
 void printProcessList(process** process_list);// print the processes.
 void freeProcessList(process* process_list);// free the memory of the process list.
 void updateProcessList(process **process_list);// update the process list to remove terminated processes.
 void updateProcessStatus(process* process_list, int pid, int status);// update the status of a process in the process list.
-//Implement the following to add some functionality to your process list:
-//
-//    void freeProcessList(process* process_list);: free all memory allocated for the process list.
-//    void updateProcessList(process **process_list);: go over the process list, and for each process check if it is done, you can use waitpid with the option WNOHANG. WNOHANG does not block the calling process, the process returns from the call to waitpid immediately. If no process with the given process id exists, then waitpid returns -1.
-//    In order to learn if a process was stopped (SIGTSTP), resumed (SIGCONT) or terminated (SIGINT), It's highly essential you read and understand how to use waitpid(2) before implementing this function
-//    void updateProcessStatus(process* process_list, int pid, int status): find the process with the given id in the process_list and change its status to the received status.
-//    update void printProcessList(process** process_list);:
-//        Run updateProcessList() at the beginning of the function.
-//        If a process was "freshly" terminated, delete it after printing it (meaning print the list with the updated status, then delete the dead processes).
 
 
 int main(int argc,char ** argv) {
     if ((argc > 1) && (strcmp(argv[1],"-d") == 0)) {
         debugF = 1;//debug on
     }
-
+    process* process_list = NULL;
     while (1) {
         char input[MAX_INPUT_SIZE];
         char cwd[PATH_MAX];
@@ -79,7 +70,6 @@ int main(int argc,char ** argv) {
                 fprintf(stderr, "cd: %s: Could not found such file or directory \n", path_cd);
             }
         }else if (strcmp(input, "procs") == 0) {
-            process* process_list = NULL;
             printf("got here\n");
             printProcessList(&process_list);
         }else{
@@ -113,7 +103,7 @@ void addProcess(process** process_list, cmdLine* cmd, pid_t pid){
 //        Run updateProcessList() at the beginning of the function.
 //        If a process was "freshly" terminated, delete it after printing it (meaning print the list with the updated status, then delete the dead processes).
 void printProcessList(process** process_list){
-    updateProcessList(process_list);
+   // updateProcessList(process_list);
     process* current = *process_list;
     printf("        PID          Command      STATUS\n");
     int i = 0;
@@ -192,7 +182,8 @@ void updateProcessStatus(process* process_list, int pid, int status){
 //
 //Notes:
 //    The line parser automatically generates a list of cmdLine structures to accommodate pipelines. For instance, when parsing the command "ls | grep .c", two chained cmdLine structures are created, representing ls and grep respectively.
-//    Your shell must still support all previous features, including input/output redirection from lab 2. Obviously, it makes no sense to redirect the output of the left--hand-side process (as then nothing goes into the pipe), and this should be considered an error, and likewise redirecting the input of the right-hand-side process is an error (as then the pipe output is hanging). In such cases, print an error message to stderr without generating any new processes. It is important to note that commands utilizing both I/O redirection and pipelines are indeed quite common (e.g. "cat < in.txt | tail -n 2 > out.txt").
+//    Your shell must still support all previous features, including input/output redirection from lab 2. Obviously, it makes no sense to redirect the output of the left--hand-side process (as then nothing goes into the pipe), and this should be considered an error, and likewise redirecting the input of the right-hand-side process is an error (as then the pipe output is hanging). In such cases, print an error message to stderr without generating any new processes.
+//    It is important to note that commands utilizing both I/O redirection and pipelines are indeed quite common (e.g. "cat < in.txt | tail -n 2 > out.txt").
 //    As in previous tasks, you must keep your program free of memory leaks.
 void execute(cmdLine *pCmdLine) {
     pid_t processID;
@@ -222,11 +213,21 @@ void execute(cmdLine *pCmdLine) {
     }
     if(pCmdLine->next != NULL){
         int pipefd[2];
+        // Check for invalid redirections
+        if (pCmdLine->outputRedirect != NULL) {
+            fprintf(stderr, "Error: Output redirection in the first part of a pipeline is not allowed.\n");
+            return;
+        }
+        if (pCmdLine->next->inputRedirect != NULL) {
+            fprintf(stderr, "Error: Input redirection in the second part of a pipeline is not allowed.\n");
+            return;
+        }
         if (pipe(pipefd) == -1) {
             perror("pipe");
             exit(EXIT_FAILURE);
         }
         processID = fork();
+        addProcess(&process_list, pCmdLine, processID);
         if (processID == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
@@ -249,6 +250,7 @@ void execute(cmdLine *pCmdLine) {
                 exit(EXIT_FAILURE);
             }
             processID = fork();
+            addProcess(&process_list, pCmdLine->next, processID);
             if (processID == -1) {
                 perror("fork");
                 exit(EXIT_FAILURE);
@@ -273,12 +275,13 @@ void execute(cmdLine *pCmdLine) {
         }
     }else{
         processID = fork();
+        addProcess(&process_list, pCmdLine, processID);
         if (processID == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
         }
+
         if (processID == 0) { // Child process
-            //if input redirect !=null
             if((*pCmdLine).inputRedirect != NULL){
                 int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR);//open file  with read only access
                 if (input_file_desc == -1) {
