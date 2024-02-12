@@ -27,7 +27,7 @@ typedef struct process{
     int status;                           /* status of the process: RUNNING/SUSPENDED/TERMINATED */
     struct process *next;	                  /* next process in chain */
 } process;
-process* process_list = NULL;
+process* processList = NULL;
 void addProcess(process** process_list, cmdLine* cmd, pid_t pid);// Receive a process list (process_list), a command (cmd), and the process id (pid) of the process running the command. Note that process_list is a pointer to a pointer so that we can insert at the beginning of the list if we wish.
 void printProcessList(process** process_list);// print the processes.
 void freeProcessList(process* process_list);// free the memory of the process list.
@@ -39,7 +39,6 @@ int main(int argc,char ** argv) {
     if ((argc > 1) && (strcmp(argv[1],"-d") == 0)) {
         debugF = 1;//debug on
     }
-    process* process_list = NULL;
     while (1) {
         char input[MAX_INPUT_SIZE];
         char cwd[PATH_MAX];
@@ -70,12 +69,11 @@ int main(int argc,char ** argv) {
                 fprintf(stderr, "cd: %s: Could not found such file or directory \n", path_cd);
             }
         }else if (strcmp(input, "procs") == 0) {
-            printf("got here\n");
-            printProcessList(&process_list);
+            printProcessList(&processList);
         }else{
             cmdLine *parsedCmd = parseCmdLines(input);// Parse the input
             execute(parsedCmd);// Execute the command
-            freeCmdLines(parsedCmd); // Release resources
+            //freeCmdLines(parsedCmd); // Release resources
         }
 
 
@@ -99,22 +97,40 @@ void addProcess(process** process_list, cmdLine* cmd, pid_t pid){
 }
 
 
-//    update void printProcessList(process** process_list);:
-//        Run updateProcessList() at the beginning of the function.
-//        If a process was "freshly" terminated, delete it after printing it (meaning print the list with the updated status, then delete the dead processes).
+//void printProcessList(process** process_list){
+//   // updateProcessList(process_list);
+//    process* current = *process_list;
+//    printf("PID\tCommand\tSTATUS\n");
+//    int i = 0;
+//    while (current != NULL) {
+//        char* status=(current->status==RUNNING)?"Running":(current->status==SUSPENDED)?"Suspended":"Terminated";
+//        printf("%d\t%s\t%s\n",  current->pid, current->cmd->arguments[0], status);
+//        current = current->next;
+//        i++;
+//    }
+//}
 void printProcessList(process** process_list){
-   // updateProcessList(process_list);
+    updateProcessList(process_list);
+    printf("PID\t\tCommand\t\tSTATUS\n");
     process* current = *process_list;
-    printf("        PID          Command      STATUS\n");
-    int i = 0;
     while (current != NULL) {
-        char* status=(current->status==RUNNING)?"Running":(current->status==SUSPENDED)?"Suspended":"Terminated";
-//        printf("%d\t%d\t%s\t%s\n", i, current->pid, current->cmd->arguments[0], status);
-       printf("%d        %d        %s        %d\n", i, current->pid, current->cmd->arguments[0], current->status);
+        const char* statusStr = (current->status == RUNNING) ? "Running" :
+                                (current->status == SUSPENDED) ? "Suspended" : "Terminated";
+
+        // Ensure we're accessing the command correctly.
+        // cmd->arguments[0] should point to the command name.
+        // Using %s to print a string, so it must be null-terminated.
+        if (current->cmd && current->cmd->arguments[0]) {
+            printf("%d\t\t%s\t\t%s\n", current->pid, current->cmd->arguments[0], statusStr);
+        } else {
+            // Fallback in case something is wrong with the command.
+            printf("%d\t\t[Unknown Command]\t\t%s\n", current->pid, statusStr);
+        }
+
         current = current->next;
-        i++;
     }
 }
+
 
 void freeProcessList(process* process_list){
     process* current = process_list;
@@ -126,40 +142,112 @@ void freeProcessList(process* process_list){
         current = next;
     }
 }
-void updateProcessList(process **process_list){
-    process* current = *process_list;
-    process* prev = NULL;
-    while (current != NULL) {
-        int status;
-        int result = waitpid(current->pid, &status, WNOHANG);
-        if (result == -1) {
-            perror("waitpid");
-            exit(EXIT_FAILURE);
-        } else if (result == 0) {
-            prev = current;
-            current = current->next;
-        } else {
-            if (WIFEXITED(status)) {
-                current->status = TERMINATED;
-            } else if (WIFSTOPPED(status)) {
-                current->status = SUSPENDED;
-            } else if (WIFCONTINUED(status)) {
-                current->status = RUNNING;
+
+void updateProcessList(process **process_list)
+{
+    int begin = 0;
+    process* temp = *process_list;
+    while(temp != NULL)
+    {
+        int returnID = waitpid(temp->pid, &begin, WNOHANG | WUNTRACED | WCONTINUED);
+        if(WIFCONTINUED(begin)) // checks if the process changed its state to RUNNING
+        {
+            updateProcessStatus(temp, temp->pid, RUNNING);
+            break;
+        }
+        else
+        {
+            if(WIFSTOPPED(begin)) // checks if the process changed its state to SUSPENDED
+            {
+                updateProcessStatus(temp, temp->pid, SUSPENDED);
+                break;
             }
-            if (prev == NULL) {
-                *process_list = current->next;
-                freeCmdLines(current->cmd);
-                free(current);
-                current = *process_list;
-            } else {
-                prev->next = current->next;
-                freeCmdLines(current->cmd);
-                free(current);
-                current = prev->next;
+            else
+            {
+                if(returnID != 0) // checks if the process changed its state to TERMINATED
+                    updateProcessStatus(temp, temp->pid, TERMINATED);
             }
         }
+        temp = temp->next;
     }
 }
+//void updateProcessList(process **process_list) {
+//    int stat = 0;
+//    process* temp = *process_list;
+//    while (temp != NULL) {
+//        // Attempt to update the status of the process without blocking
+//        int returnID = waitpid(temp->pid, &stat, WNOHANG | WUNTRACED | WCONTINUED);
+//
+//        if (returnID > 0) { // If waitpid returned, meaning there was a status change
+//            if (WIFCONTINUED(stat)) {
+//                // Process has continued running
+//                temp->status = RUNNING;
+//            } else if (WIFSTOPPED(stat)) {
+//                // Process is stopped
+//                temp->status = SUSPENDED;
+//            } else if (WIFEXITED(stat) || WIFSIGNALED(stat)) {
+//                // Process has exited or was killed
+//                temp->status = TERMINATED;
+//            }
+//        }
+//        // Move to the next process in the list
+//        temp = temp->next;
+//    }
+//}
+
+//void updateProcessList(process **process_list) {
+//    int status;
+//    process *current = *process_list, *prev = NULL;
+//    while (current != NULL) {
+//        if (waitpid(current->pid, &status, WNOHANG) > 0) {
+//            if (WIFEXITED(status) || WIFSIGNALED(status)) {;
+//                updateProcessStatus(*process_list, current->pid, TERMINATED);
+//            } else if (WIFSTOPPED(status)) {
+//                updateProcessStatus(*process_list, current->pid, SUSPENDED);
+//            } else if (WIFCONTINUED(status)) {
+//                updateProcessStatus(*process_list, current->pid, RUNNING);
+//            }
+//        }
+//        prev = current;
+//        current = current->next;
+//    }
+//}
+
+
+//void updateProcessList(process **process_list){
+//    process* current = *process_list;
+//    process* prev = NULL;
+//    while (current != NULL) {
+//        int status;
+//        int result = waitpid(current->pid, &status, WNOHANG);
+//        if (result == -1) {
+//            perror("waitpid");
+//            exit(EXIT_FAILURE);
+//        } else if (result == 0) {
+//            prev = current;
+//            current = current->next;
+//        } else {
+//            if (WIFEXITED(status)) {
+//                current->status = TERMINATED;
+//            } else if (WIFSTOPPED(status)) {
+//                current->status = SUSPENDED;
+//            } else if (WIFCONTINUED(status)) {
+//                current->status = RUNNING;
+//            }
+//            if (prev == NULL) {
+//                *process_list = current->next;
+//                freeCmdLines(current->cmd);
+//                free(current);
+//                current = *process_list;
+//            } else {
+//                prev->next = current->next;
+//                freeCmdLines(current->cmd);
+//                free(current);
+//                current = prev->next;
+//            }
+//        }
+//    }
+//}
 
 void updateProcessStatus(process* process_list, int pid, int status){
     process* current = process_list;
@@ -171,6 +259,7 @@ void updateProcessStatus(process* process_list, int pid, int status){
         current = current->next;
     }
 }
+
 
 /*Write a function execute(cmdLine *pCmdLine) that receives a parsed line and
  * invokes the program specified in the cmdLine using the proper system call . */
@@ -200,11 +289,13 @@ void execute(cmdLine *pCmdLine) {
         int pid = atoi(pCmdLine->arguments[1]);
         result = kill(pid, SIGCONT);
 
+    }else if (strcmp( pCmdLine->arguments[0] , "suspend")==0){
+        int pid = atoi(pCmdLine->arguments[1]);
+        result = kill(pid, SIGSTOP);
 
     } else if (strcmp( pCmdLine->arguments[0], "nuke") == 0) {
         int pid = atoi(pCmdLine->arguments[1]);
-        result = kill(pid, SIGINT);
-
+        result = kill(pid, SIGKILL);
     }
 
     if (result == 0) {
@@ -227,7 +318,7 @@ void execute(cmdLine *pCmdLine) {
             exit(EXIT_FAILURE);
         }
         processID = fork();
-        addProcess(&process_list, pCmdLine, processID);
+        //addProcess(&process_list, pCmdLine, processID);
         if (processID == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
@@ -250,7 +341,7 @@ void execute(cmdLine *pCmdLine) {
                 exit(EXIT_FAILURE);
             }
             processID = fork();
-            addProcess(&process_list, pCmdLine->next, processID);
+           // addProcess(&process_list, pCmdLine->next, processID);
             if (processID == -1) {
                 perror("fork");
                 exit(EXIT_FAILURE);
@@ -275,7 +366,7 @@ void execute(cmdLine *pCmdLine) {
         }
     }else{
         processID = fork();
-        addProcess(&process_list, pCmdLine, processID);
+       // addProcess(&process_list, pCmdLine, processID);
         if (processID == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
@@ -311,6 +402,8 @@ void execute(cmdLine *pCmdLine) {
         } else { // Parent process
             //make a parent process wait until one of its child processes terminates.
             // If blocking is set (no "&" at the end), wait for the child process
+            fprintf(stderr,"processCmd: %s\n",pCmdLine->arguments[0]);
+            addProcess(&processList, pCmdLine, processID);
             if((*pCmdLine).blocking){
                 if (waitpid(processID, NULL, 0) == -1) {
                     perror("waitpid");
@@ -320,56 +413,5 @@ void execute(cmdLine *pCmdLine) {
         }
 
     }
-
-
-
-//    processID = fork();
-//
-//    if (processID == -1) {
-//        perror("fork");
-//        exit(EXIT_FAILURE);
-//    }
-//
-//
-//    if (processID == 0) { // Child process
-//        //if input redirect !=null
-//        if((*pCmdLine).inputRedirect != NULL){
-//            int input_file_desc = open((*pCmdLine).inputRedirect,O_RDWR);//open file  with read only access
-//            if (input_file_desc == -1) {
-//                perror("open inputRedirect");
-//                exit(EXIT_FAILURE);
-//            }
-//            if (dup2(input_file_desc, STDIN_FILENO) == -1) {
-//                perror("dup2");
-//                exit(EXIT_FAILURE);
-//            }
-//            close(input_file_desc);
-//        }
-//
-//        if ((*pCmdLine).outputRedirect != NULL) {
-//            int input_file_desc = open((*pCmdLine).outputRedirect, O_WRONLY | O_CREAT | O_TRUNC);
-//            if (input_file_desc == -1) {
-//                perror("open outputRedirect");
-//                _exit(EXIT_FAILURE);
-//            }
-//            dup2(input_file_desc, STDOUT_FILENO);
-//            close(input_file_desc);
-//        }
-//        if (execvp((*pCmdLine).arguments[0], pCmdLine->arguments) == -1) {
-//            perror("execvp");
-//            exit(EXIT_FAILURE);
-//        }
-//    } else { // Parent process
-//        //make a parent process wait until one of its child processes terminates.
-//        // If blocking is set (no "&" at the end), wait for the child process
-//        if((*pCmdLine).blocking){
-//            if (waitpid(processID, NULL, 0) == -1) {
-//                perror("waitpid");
-//                exit(EXIT_FAILURE);
-//            }
-//        }
-//    }
-
-
 
 }
