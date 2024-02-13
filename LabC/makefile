@@ -14,11 +14,14 @@
 CC=gcc
 CFLAGS=-m32
 
-all: myshell mypipeline
+all: myshell mypipeline looper
 
 # Compile myshell program with LineParser.c
 myshell: myshell.c LineParser.c
 	$(CC) $(CFLAGS) -o myshell myshell.c LineParser.c
+
+looper: Looper.c
+	gcc -m32 -o looper Looper.c
 
 # Compile mypipeline program
 mypipeline: mypipeline.c
