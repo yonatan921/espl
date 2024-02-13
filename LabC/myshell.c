@@ -70,8 +70,11 @@ int main(int argc,char ** argv) {
         input[strcspn(input, "\n")] = '\0';
         if (strcmp(input, "quit") == 0) {
             printf("Exit shell.\n");
+            fprintf(stderr, "free processList\n");
             freeProcessList(processList);
+            fprintf(stderr, "free parseCmdLines\n");
             freeCmdLines(parseCmdLines(input));
+            fprintf(stderr,"free history\n");
             free_history(history, historyCount);
             break;
         } else{
@@ -107,8 +110,7 @@ void func_main_helper(char input[], char *history[], int newest, int oldest, int
             }
             func_main_helper(input, history, newest, oldest, historyCount);
         }
-    }
-    else if (strncmp(input, "!", 1) == 0) {
+    }else if (strncmp(input, "!", 1) == 0) {
         int index = atoi(input + 1);
         if (index > historyCount || index <= 0) {
             fprintf(stderr, "No such command in history.\n");
@@ -169,7 +171,6 @@ void free_history(char **history, int historyCount) {
         free(history[i]);
         i++;
     }
-    free(history);
 }
 
 
