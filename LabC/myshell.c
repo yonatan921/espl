@@ -18,6 +18,8 @@
 #define STDIN_FAILURE -1
 #define STDOUT_FAILURE -1
 #define MAX_INPUT_SIZE 2048
+#define HISTLEN 20 // part 4
+
 
 int debugF=0; // zero means debug off - have to be global , otherwise signatures of the functions will need to change.
 void execute(cmdLine *pCmdLine);
@@ -33,12 +35,21 @@ void printProcessList(process** process_list);// print the processes.
 void freeProcessList(process* process_list);// free the memory of the process list.
 void updateProcessList(process **process_list);// update the process list to remove terminated processes.
 void updateProcessStatus(process* process_list, int pid, int status);// update the status of a process in the process list.
+void addToHistory(char *cmd,char **history, int *newest, int *oldest, int *historyCount);
+void printHistory(int *oldest, int historyCount, char **history);
+void func_main_helper(char input[], char *history[], int newest, int oldest, int historyCount);
+void free_history(char **history, int historyCount);
 
 
 int main(int argc,char ** argv) {
+    char *history[HISTLEN];
+    int newest = 0, oldest = 0;
+    int historyCount = 0;
+
     if ((argc > 1) && (strcmp(argv[1],"-d") == 0)) {
-        debugF = 1;//debug on
+        debugF = 1; //on
     }
+
     while (1) {
         char input[MAX_INPUT_SIZE];
         char cwd[PATH_MAX];
@@ -57,30 +68,86 @@ int main(int argc,char ** argv) {
 
         // Remove the newline character at the end
         input[strcspn(input, "\n")] = '\0';
-
         if (strcmp(input, "quit") == 0) {
             printf("Exit shell.\n");
+            freeProcessList(processList);
+            freeCmdLines(parseCmdLines(input));
+            free_history(history, historyCount);
             break;
-        } else if (strncmp(input,"cd ", 3)==0) {
-            char *path_cd = input + 3; // moving the pointer to extract the path after "cd "
-            if (chdir(path_cd) == -1) {
-                //chdir:This command returns zero (0) on success.
-                // -1 is returned on an error and errno is set appropriately.
-                fprintf(stderr, "cd: %s: Could not found such file or directory \n", path_cd);
-            }
-        }else if (strcmp(input, "procs") == 0) {
-            printProcessList(&processList);
-        }else{
-            cmdLine *parsedCmd = parseCmdLines(input);// Parse the input
-            execute(parsedCmd);// Execute the command
-            //freeCmdLines(parsedCmd); // Release resources
+        } else{
+            func_main_helper(input, history, newest, oldest, historyCount);
         }
-
+        addToHistory(input, history, &newest, &oldest, &historyCount);
 
     }
 
     return 0;
 }
+
+void func_main_helper(char input[], char *history[], int newest, int oldest, int historyCount){
+
+    if (strncmp(input,"cd ", 3)==0) {
+        char *path_cd = input + 3; // moving the pointer to extract the path after "cd "
+        if (chdir(path_cd) == -1) {
+            //chdir:This command returns zero (0) on success.
+            // -1 is returned on an error and errno is set appropriately.
+            fprintf(stderr, "cd: %s: Could not found such file or directory \n", path_cd);
+        }
+    }else if (strcmp(input, "procs") == 0) {
+        printProcessList(&processList);
+    }else if (strcmp(input, "history") == 0) {
+        printHistory(&oldest, historyCount, history);
+    }else if (strcmp(input, "!!") == 0) {
+        if (historyCount == 0) {
+            fprintf(stderr, "No commands in history.\n");
+        } else {
+            strcpy(input, history[newest-1]);
+            if (debugF == 1) {
+                fprintf(stderr, "Executing command: %s\n", input);
+            }
+            func_main_helper(input, history, newest, oldest, historyCount);
+        }
+    }
+    else if (strncmp(input, "!", 1) == 0) {
+        int index = atoi(input + 1);
+        if (index > historyCount || index <= 0) {
+            fprintf(stderr, "No such command in history.\n");
+        } else {
+            strcpy(input, history[(oldest + index - 1) % HISTLEN]);
+            if (debugF == 1) {
+                fprintf(stderr, "Executing command: %s\n", input);
+            }
+           func_main_helper(input, history, newest, oldest, historyCount);
+        }
+    }
+    else{
+        cmdLine *parsedCmd = parseCmdLines(input);// Parse the input
+        execute(parsedCmd);// Execute the command
+    }
+}
+
+void addToHistory(char *cmd, char **history, int *newest, int *oldest, int *historyCount) {
+    if (*historyCount >= HISTLEN) {
+        free(history[*oldest]);
+        *oldest = (*oldest + 1) % HISTLEN;
+    } else {
+        (*historyCount)++;
+    }
+    history[*newest] = (char *)malloc(strlen(cmd) + 1);
+    strcpy(history[*newest], cmd);
+    *newest = (*newest + 1) % HISTLEN;
+}
+
+void printHistory(int *oldest, int historyCount, char **history) {
+    int i = *oldest, count = 1;
+    while (count <= historyCount) {
+        printf("%d: %s\n", count, history[i]);
+        i = (i + 1) % HISTLEN;
+        count++;
+    }
+}
+
+
 
 void addProcess(process** process_list, cmdLine* cmd, pid_t pid){
     process* newProcess = (process*)malloc(sizeof(process));
@@ -96,19 +163,16 @@ void addProcess(process** process_list, cmdLine* cmd, pid_t pid){
     }
 }
 
+void free_history(char **history, int historyCount) {
+    int i = 0;
+    while (i < historyCount) {
+        free(history[i]);
+        i++;
+    }
+    free(history);
+}
 
-//void printProcessList(process** process_list){
-//   // updateProcessList(process_list);
-//    process* current = *process_list;
-//    printf("PID\tCommand\tSTATUS\n");
-//    int i = 0;
-//    while (current != NULL) {
-//        char* status=(current->status==RUNNING)?"Running":(current->status==SUSPENDED)?"Suspended":"Terminated";
-//        printf("%d\t%s\t%s\n",  current->pid, current->cmd->arguments[0], status);
-//        current = current->next;
-//        i++;
-//    }
-//}
+
 void printProcessList(process** process_list){
     updateProcessList(process_list);
     printf("PID\t\tCommand\t\tSTATUS\n");
@@ -143,111 +207,28 @@ void freeProcessList(process* process_list){
     }
 }
 
-void updateProcessList(process **process_list)
-{
+void updateProcessList(process **process_list){
     int begin = 0;
-    process* temp = *process_list;
-    while(temp != NULL)
+    process* current = *process_list;
+    while(current)
     {
-        int returnID = waitpid(temp->pid, &begin, WNOHANG | WUNTRACED | WCONTINUED);
-        if(WIFCONTINUED(begin)) // checks if the process changed its state to RUNNING
+        int rID = waitpid(current->pid, &begin, WNOHANG | WUNTRACED | WCONTINUED);
+        if(WIFCONTINUED(begin))
         {
-            updateProcessStatus(temp, temp->pid, RUNNING);
+            updateProcessStatus(current, current->pid, RUNNING);
             break;
         }
-        else
-        {
-            if(WIFSTOPPED(begin)) // checks if the process changed its state to SUSPENDED
-            {
-                updateProcessStatus(temp, temp->pid, SUSPENDED);
-                break;
-            }
-            else
-            {
-                if(returnID != 0) // checks if the process changed its state to TERMINATED
-                    updateProcessStatus(temp, temp->pid, TERMINATED);
-            }
+        else if(WIFSTOPPED(begin)){
+            updateProcessStatus(current, current->pid, SUSPENDED);
+            break;
         }
-        temp = temp->next;
+        else if(rID != 0) {
+            updateProcessStatus(current, current->pid, TERMINATED);
+        }
+
+        current = current->next;
     }
 }
-//void updateProcessList(process **process_list) {
-//    int stat = 0;
-//    process* temp = *process_list;
-//    while (temp != NULL) {
-//        // Attempt to update the status of the process without blocking
-//        int returnID = waitpid(temp->pid, &stat, WNOHANG | WUNTRACED | WCONTINUED);
-//
-//        if (returnID > 0) { // If waitpid returned, meaning there was a status change
-//            if (WIFCONTINUED(stat)) {
-//                // Process has continued running
-//                temp->status = RUNNING;
-//            } else if (WIFSTOPPED(stat)) {
-//                // Process is stopped
-//                temp->status = SUSPENDED;
-//            } else if (WIFEXITED(stat) || WIFSIGNALED(stat)) {
-//                // Process has exited or was killed
-//                temp->status = TERMINATED;
-//            }
-//        }
-//        // Move to the next process in the list
-//        temp = temp->next;
-//    }
-//}
-
-//void updateProcessList(process **process_list) {
-//    int status;
-//    process *current = *process_list, *prev = NULL;
-//    while (current != NULL) {
-//        if (waitpid(current->pid, &status, WNOHANG) > 0) {
-//            if (WIFEXITED(status) || WIFSIGNALED(status)) {;
-//                updateProcessStatus(*process_list, current->pid, TERMINATED);
-//            } else if (WIFSTOPPED(status)) {
-//                updateProcessStatus(*process_list, current->pid, SUSPENDED);
-//            } else if (WIFCONTINUED(status)) {
-//                updateProcessStatus(*process_list, current->pid, RUNNING);
-//            }
-//        }
-//        prev = current;
-//        current = current->next;
-//    }
-//}
-
-
-//void updateProcessList(process **process_list){
-//    process* current = *process_list;
-//    process* prev = NULL;
-//    while (current != NULL) {
-//        int status;
-//        int result = waitpid(current->pid, &status, WNOHANG);
-//        if (result == -1) {
-//            perror("waitpid");
-//            exit(EXIT_FAILURE);
-//        } else if (result == 0) {
-//            prev = current;
-//            current = current->next;
-//        } else {
-//            if (WIFEXITED(status)) {
-//                current->status = TERMINATED;
-//            } else if (WIFSTOPPED(status)) {
-//                current->status = SUSPENDED;
-//            } else if (WIFCONTINUED(status)) {
-//                current->status = RUNNING;
-//            }
-//            if (prev == NULL) {
-//                *process_list = current->next;
-//                freeCmdLines(current->cmd);
-//                free(current);
-//                current = *process_list;
-//            } else {
-//                prev->next = current->next;
-//                freeCmdLines(current->cmd);
-//                free(current);
-//                current = prev->next;
-//            }
-//        }
-//    }
-//}
 
 void updateProcessStatus(process* process_list, int pid, int status){
     process* current = process_list;
@@ -261,19 +242,6 @@ void updateProcessStatus(process* process_list, int pid, int status){
 }
 
 
-/*Write a function execute(cmdLine *pCmdLine) that receives a parsed line and
- * invokes the program specified in the cmdLine using the proper system call . */
-
-//Part 2: Implementing a Pipe in the Shell
-//
-//Having learned how to create a pipe between 2 processes/programs in Part 1, we now wish to implement a pipeline inside our own shell. In this part you will extend your shell's capabilities to support pipelines that consist of just one pipe and 2 child processes. That is, support a command line with one pipe between 2 processes resulting from running executable files mentioned in the command line. The scheme uses basically the same mechanism as in part 1, except that now the program to be executed in each child process is determined by the command line.
-//Your shell must be able now to run commands like: ls|wc -l which basically counts the number of files/directories under the current working dir. The most important thing to remember about pipes is that the write-end of the pipe needs to be closed in all processes, otherwise the read-end of the pipe will not receive EOF, unless the main process terminates.
-//
-//Notes:
-//    The line parser automatically generates a list of cmdLine structures to accommodate pipelines. For instance, when parsing the command "ls | grep .c", two chained cmdLine structures are created, representing ls and grep respectively.
-//    Your shell must still support all previous features, including input/output redirection from lab 2. Obviously, it makes no sense to redirect the output of the left--hand-side process (as then nothing goes into the pipe), and this should be considered an error, and likewise redirecting the input of the right-hand-side process is an error (as then the pipe output is hanging). In such cases, print an error message to stderr without generating any new processes.
-//    It is important to note that commands utilizing both I/O redirection and pipelines are indeed quite common (e.g. "cat < in.txt | tail -n 2 > out.txt").
-//    As in previous tasks, you must keep your program free of memory leaks.
 void execute(cmdLine *pCmdLine) {
     pid_t processID;
 
