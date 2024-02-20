@@ -37,11 +37,11 @@ infection:
     ret
 
 open_file:
-	push FILE_PER               ;
-	push EDIT | 1           ; edit mode append or write
-	mov eax, [ebp + 8]      ; file path to eax
-	push eax                ; push file path
-	push OPEN                 ; system call open
+	push FILE_PER           ;Permission
+	push EDIT | 1           ; Edit
+	mov eax, [ebp + 8]
+	push eax                ;file path
+	push OPEN
 	call system_call
 	add esp, 4              ;remove open
 	add esp, 4              ;remove filepath

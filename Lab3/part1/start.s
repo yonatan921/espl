@@ -7,7 +7,11 @@ section .data
 section .text
     global _start
 
-
+STDOUT EQU 1
+EXIT EQU 1
+WRITE EQU 4
+READ EQU 3
+OPEN EQU 5
 
 _start:
     pop    dword ecx    ; ecx = argc
@@ -47,13 +51,9 @@ parse_args:
     mov    al, byte [edx + 1]    
     call check_flags
 
-
-
-    
-
 read_input:
     ; Read input character
-    mov    eax, 3      ; Read
+    mov    eax, READ      ; Read
     movzx    ebx, byte[infile]    ; Set infile
     mov    ecx, buf ; buf address
     mov    edx, 1      ; Read 1 byte
@@ -81,7 +81,7 @@ read_input:
 print_character:
     ; Write encoded character
     mov byte [buf], dl  ; 
-    mov    eax, 4      ; Write
+    mov    eax, WRITE     ; Write
     movzx  ebx, byte[outfile]      ; Set outfile
     mov    ecx, buf ; buf address
     mov    edx, 1      ; 
@@ -93,14 +93,12 @@ print_character:
 next_arg: ; move to the next arg and print the current one
     push ebx
     push ecx
-    
     push edx          ; Push the address of the string
-    
     call strlen       ; get len of the string
     add esp, 4        ; Adjust the stack pointer
     mov edi, eax
-    mov    eax, 4      ; 
-    mov    ebx, 1      ; 
+    mov    eax, 4
+    mov    ebx, 1
     mov    ecx, edx ; 
     mov    edx, edi       ; Write all the argument 
     int    0x80        ; 
@@ -112,7 +110,7 @@ next_arg: ; move to the next arg and print the current one
 
 exit_program:
     ; Exit program
-    mov    eax, 1      ; System call number 1 is exit
+    mov    eax, EXIT     ; System call number 1 is exit
     xor    ebx, ebx    ; Exit with return code 0
     int    0x80        ; 
 
@@ -135,7 +133,7 @@ set_infile:
     push ebx
     push ecx
     lea ebp, [edx+2]; 
-    mov    eax, 5       ; Open
+    mov    eax, OPEN       ; Open
     mov    ebx, ebp; File name or path
     mov    ecx, 0       ; read only
     int    0x80         ; 
@@ -153,7 +151,7 @@ set_outfile:
     push ecx
     lea ebp, [edx+2]; 
     mov    ecx, 1 | 64 | 512      ; Write Only
-    mov    eax, 5       ; Open
+    mov    eax, OPEN       ; Open
     mov    ebx, ebp; File name or path
     mov     edx, 0644 ;
     int    0x80         ;
@@ -177,9 +175,10 @@ done:
     pop edx 
     ret
 
+
 print_newline:
-    mov eax, 4       ; Write
-    mov ebx, 1       ; stdout
+    mov eax, WRITE
+    mov ebx, STDOUT
     mov ecx, newLine ; buf address
     mov edx, 1       ; Write 1 byte
     int 0x80         ; 
