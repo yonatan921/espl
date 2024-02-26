@@ -25,7 +25,7 @@ void toggleDebugMode(state* s) {
 
 void setFileName(state* s) {
     printf("Enter file name: ");
-    scanf("%127s", s->file_name);
+    scanf("%100s", s->file_name);
     if (s->debug_mode) {
         fprintf(stderr, "Debug: file name set to '%s'\n", s->file_name);
     }
@@ -56,52 +56,71 @@ void notImplemented(state* s) {
     printf("Not implemented yet\n");
 }
 
-void menu(state* s) {
-    char* options[] = {
-            "Toggle Debug Mode",
-            "Set File Name",
-            "Set Unit Size",
-            "Load Into Memory",
-            "Toggle Display Mode",
-            "Memory Display",
-            "Save Into File",
-            "Memory Modify",
-            "Quit",
-            NULL
-    };
 
-    void (functions[])(state) = {
-        toggleDebugMode,
-                setFileName,
-                setUnitSize,
-                notImplemented,
-                notImplemented,
-                notImplemented,
-                notImplemented,
-                notImplemented,
-                quit
-    };
+struct fun_desc {
+    char *name;
+    void (*fun)(state*);
+};
 
-    int choice;
-    while(1) {
-        if (s->debug_mode) {
-            printf("Debug: file_name = %s, unit_size = %d, mem_count = %zu\n", s->file_name, s->unit_size, s->mem_count);
+
+struct fun_desc menu[] = {
+        {"Toggle Debug Mode", toggleDebugMode},
+        {"Set File Name", setFileName},
+        {"Set Unit Size", setUnitSize},
+        {"Load Into Memory", notImplemented},
+        {"Toggle Display Mode", notImplemented},
+        {"Memory Display", notImplemented},
+        {"Save Into File", notImplemented},
+        {"Memory Modify", notImplemented},
+        {"Quit", quit},
+        {NULL, NULL}
+};
+
+//void menu(state* s) {
+//    int choice;
+//    while(1) {
+//        if (s->debug_mode) {
+//            printf("Debug: file_name = %s, unit_size = %d, mem_count = %zu\n", s->file_name, s->unit_size, s->mem_count);
+//        }
+//        printf("Choose action:\n");
+//        for (int i = 0; options[i] != NULL; i++) {
+//            printf("%d-%s\n", i, options[i]);
+//        }
+//        scanf("%d", &choice);
+//        if (choice >= 0 && choice < (sizeof(options) / sizeof(char*)) - 1) {
+//            (*functions[choice])(s);
+//        } else {
+//            printf("Invalid choice\n");
+//        }
+//    }
+//}
+void menu_func(state* s) {
+    int userChoice;
+    int menuSize = sizeof(menu) / sizeof(menu[0]) - 1;
+    while (1) {
+        printf("\nPlease choose a function (0-%d):\n\n", menuSize - 1);//Tb4
+        for (int i = 0; menu[i].name != NULL; i++) {
+            printf("%d) %s function.\n", i, menu[i].name);
         }
-        printf("Choose action:\n");
-        for (int i = 0; options[i] != NULL; i++) {
-            printf("%d-%s\n", i, options[i]);
+        scanf("%d",&userChoice);
+        fgetc(stdin);
+        if(userChoice==EOF){
+            exit(EXIT_SUCCESS);
         }
-        scanf("%d", &choice);
-        if (choice >= 0 && choice < (sizeof(options) / sizeof(char*)) - 1) {
-            (*functions[choice])(s);
+
+        if (userChoice >= 0 && userChoice < menuSize) {
+            menu[userChoice].fun(s);
+            printf("\n");
         } else {
-            printf("Invalid choice\n");
+            exit(EXIT_SUCCESS);
         }
+
+
     }
 }
 
 int main() {
     state s = {0, "", 1, {0}, 0}; // Initialize state
-    menu(&s);
+    menu_func(&s);
     return 0;
 }
