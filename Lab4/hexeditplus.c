@@ -105,13 +105,50 @@ void memoryDisplay(state* s) {
         memcpy(&val, start + i * s->unit_size, s->unit_size); // Copy unit_size bytes to val
         if (s->display_mode) {
             // Hexadecimal
-            printf(hex_formats[s->unit_size / 2 - 1], val);
+            printf(hex_formats[s->unit_size - 1], val);
         } else {
             // Decimal
-            printf(dec_formats[s->unit_size / 2 - 1], val);
+            printf(dec_formats[s->unit_size -1 ], val);
         }
     }
 }
+
+
+void SaveIntoFile(state* s){
+    FILE* file = fopen(s->file_name, "r+");
+    printf("Please enter <source-address> <target-location> <length>: ");
+    int source_address = 0;
+    int target_location = 0;
+    int length = 0;
+    scanf("%x %x %d", &source_address, &target_location, &length);
+    fseek(file, 0L, SEEK_END);
+    if (target_location > ftell(file)){
+        printf("Out of file bounds");
+        return;
+    }
+    fseek(file, 0, SEEK_SET);
+    fseek(file, target_location, SEEK_SET);
+    if (source_address == 0)
+    {
+        fwrite(&s->mem_buf, s->unit_size, length, file);
+    }
+    else{
+        fwrite(&source_address, s->unit_size, length, file);
+    }
+    fclose(file);
+}
+
+void MemoryModify(state* s){
+    printf("Please enter <location> <val> \n");
+    int location = 0;
+    int val = 0;
+    scanf("%x %x", &location, &val);
+    if (s->debug_mode){
+        printf("Debug: location = %x, val = %x\n",  location, val);
+    }
+    memcpy(&s->mem_buf[location],&val,s->unit_size);
+}
+
 
 void quit(state* s) {
     if (s->debug_mode) {
