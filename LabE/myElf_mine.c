@@ -10,34 +10,40 @@
 
 //global var
 
-int debug_mode = 0;
-int fd1=-1;
-int fd2=-1;
-void* map_start1=NULL;
-void* map_start2=NULL;
-struct stat stNum1;
-struct stat stNum2;
-Elf32_Ehdr *header1 = NULL;
-Elf32_Ehdr *header2 = NULL;
-int amount_of_symbols1=-1;
-int amount_of_symbols2=-1;
+int debug_mode = 0;//0 for off, 1 for on
+int fd1=-1,fd2=-1;//file descriptor
+void* map_start1=NULL,*map_start2=NULL; //pointer to the mapped file
+struct stat stat1, stat2;
+Elf32_Ehdr *header1 = NULL ,*header2 = NULL;
+int amount_of_symbols1=-1 ,amount_of_symbols2=-1;
 
-//----------------------------------------------------------------------------------//
+void examine_elf_file();
+void print_section_names();
+void print_symbols();
+void check_files_for_merge();
+void merge_elf_files();
+void quit_program();
+void toggle_debug_mode();
+void SaveNumSymbols1();
+void SaveNumSymbols2();
+void OpenAndMap1(char fileName[]);
+void OpenAndMap2(char fileName[]);
+char *getSHType(int num);
+void printSection(void *map_start,Elf32_Ehdr *elf_header);
+void PrintSymbolsHelper(void *map_start,Elf32_Ehdr *elf_header, int numSymbols);
+
+
 struct fun_desc {
     char *name;
-    void (*action)();
+    void (*func)();
 };
-//----------------------------------------------------------------------------------//
-void ToggleDebugMode(){
-    if (debug_mode==0) {
-        debug_mode=1;
-        printf("Debug: Debug flag now on\n");
-    }
-    else if (debug_mode==1){
-        debug_mode=0;
-        printf("Debug: Debug flag now off\n");
-    }
+
+
+void toggle_debug_mode() {
+    debug_mode = !(debug_mode);
+    printf("Debug flag now %s\n", debug_mode ? "ON" : "OFF");
 }
+
 void SaveNumSymbols1(){
     Elf32_Shdr * section_header = (Elf32_Shdr *)(map_start1 + header1->e_shoff);
     int i;
@@ -70,14 +76,14 @@ void OpenAndMap1(char fileName[] ){
         return;
     }
     //The fstat function usually takes a file descriptor as an argument and fills a structure with the file's information.
-    if (fstat(fd1, &stNum1) == -1) {
+    if (fstat(fd1, &stat1) == -1) {
         printf("Error getting file size.\n");
         close(fd1);
         fd1 = -1;
         return;
     }
     //The mmap function typically takes parameters such as the file descriptor of the file to be mapped
-    map_start1 = mmap(NULL, stNum1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
+    map_start1 = mmap(NULL, stat1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
     if (map_start1 == MAP_FAILED) {
         printf("Error mapping the file into memory.\n");
         close(fd1);
@@ -106,14 +112,14 @@ void OpenAndMap2(char fileName[] ){
         return;
     }
     //The fstat function usually takes a file descriptor as an argument and fills a structure with the file's information.
-    if (fstat(fd2, &stNum2) == -1) {
+    if (fstat(fd2, &stat2) == -1) {
         printf("Error getting file size.\n");
         close(fd2);
         fd2 = -1;
         return;
     }
 
-    map_start2 = mmap(NULL, stNum2.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
+    map_start2 = mmap(NULL, stat2.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
     if (map_start2 == MAP_FAILED) {
         printf("Error mapping the file into memory.\n");
         close(fd2);
@@ -134,7 +140,7 @@ void OpenAndMap2(char fileName[] ){
     printf("Number of program header entries: %u\n", header2->e_phnum);
     printf("Size of each program header entry: %u\n", header2->e_phentsize);
 }
-void ExamineELFFile(){
+void examine_elf_file(){
 
     printf("Enter the ELF file name:  ");
     char buff[100];
@@ -160,7 +166,7 @@ void ExamineELFFile(){
 
 
 }
-char *getSectionHeaderType(int num)
+char *getSHType(int num)//get the section header type
 {
     switch (num)
     {
@@ -202,13 +208,13 @@ void printSection(void *map_start,Elf32_Ehdr *elf_header) {
     for (i = 0; i <num_sections; i++)
     {
         char *name = shstrtab + section_header[i].sh_name;
-        char* sectionType = getSectionHeaderType(section_header[i].sh_type);
+        char* sectionType = getSHType(section_header[i].sh_type);
         printf("[%d] %s, %x, %x, %d, %s\n", i, name, section_header[i].sh_addr, section_header[i].sh_offset,
                section_header[i].sh_size, sectionType);
     }
 
 }
-void PrintSectionNames(){
+void print_section_names(){
     if (fd1 == -1 &&fd2 == -1) {
         printf("PrintSectionNames:Cannot Print Section- no ELF files.\n");
         return;
@@ -299,7 +305,7 @@ void PrintSymbolsHelper(void *map_start,Elf32_Ehdr *elf_header, int numSymbols) 
     }
 
 }
-void PrintSymbols(){
+void print_symbols(){
     if (fd1 == -1 &&fd2 == -1) {
         printf("PrintSymbols :Cannot Print Symbols- no ELF files.\n");
         return;
@@ -312,7 +318,7 @@ void PrintSymbols(){
         PrintSymbolsHelper(map_start2,header2,amount_of_symbols2);
     }
 }
-void CheckFilesForMerge(){
+void check_files_for_merge(){
     if (fd1 == -1 || fd2 == -1 ) {
         printf("CheckFilesForMerge :there are no 2 ELF files.\n");
         return;
@@ -384,7 +390,7 @@ void CheckFilesForMerge(){
 }
 
 
-void MergeELFFiles(){
+void merge_elf_files(){
     if (fd1 == -1 || fd2 == -1 ) {
         printf("MergeELFFiles :there are no 2 ELF files.\n");
         return;
@@ -478,72 +484,61 @@ void MergeELFFiles(){
 }
 
 
-void Quit(){
-
-    if (map_start1!=NULL){
-        munmap(map_start1,0);
-        map_start1=NULL;
-    }
-    if (fd1!=-1){
+void quit_program() {
+    if (fd1 != -1) {
         close(fd1);
-        fd1=-1;
     }
-    if (header1!=NULL){
-        header1=NULL;
+    if (fd2 != -1) {
+        close(fd2);
     }
-
-    if (map_start2!=NULL){
-        munmap(map_start2,0);
-        map_start2=NULL;
+    if (map_start1 != NULL) {
+        munmap(map_start1, stat1.st_size);
     }
-    if (fd2!=-1){
-        close(fd1);
-        fd2=-1;
+    if (map_start2 != NULL) {
+        munmap(map_start2, stat2.st_size);
     }
-    if (header2!=NULL){
-        header2=NULL;
-    }
-    if (debug_mode==1){
-        printf("Debug:Exiting...\n");
-    }
-
-    exit(0);
+    exit(EXIT_SUCCESS);
 }
 
-int main(int argc, char **argv){
 
-    int i,c;
-    char out[10];
-    struct fun_desc menu[] = {
-            { "Toggle Debug Mode", ToggleDebugMode },
-            { "Examine ELF File",ExamineELFFile },
-            {"Print Section Names",PrintSectionNames},
-            {"Print Symbols",PrintSymbols},
-            {"Check Files for Merge", CheckFilesForMerge },
-            {"Merge ELF Files",MergeELFFiles},
-            {"Quit",Quit},
-            { NULL, NULL } };
-    while (1){
-        printf("\nChoose action:\n");
-        for( i=0; i < 7;i++){
-            printf("%d)",i);
-            printf("%s",menu[i].name);
+struct fun_desc menu[] = {
+        {"Toggle Debug Mode", toggle_debug_mode},
+        {"Examine ELF File", examine_elf_file},
+        {"Print Section Names", print_section_names},
+        {"Print Symbols", print_symbols},
+        {"Check Files for Merge", check_files_for_merge},
+        {"Merge ELF Files", merge_elf_files},
+        {"Quit", quit_program},
+        {NULL, NULL}
+};
+
+void menu_func() {
+    int userChoice;
+    int menuSize = sizeof(menu) / sizeof(menu[0]) - 1;
+    while (1) {
+        printf("\nPlease choose a function (0-%d):\n\n", menuSize - 1);//Tb4
+        for (int i = 0; menu[i].name != NULL; i++) {
+            printf("%d) %s function.\n", i, menu[i].name);
+        }
+        scanf("%d",&userChoice);
+        fgetc(stdin);
+        if(userChoice==EOF){
+            exit(EXIT_SUCCESS);
+        }
+
+        if (userChoice >= 0 && userChoice < menuSize) {
+            menu[userChoice].func();
             printf("\n");
+        } else {
+            printf("Not within bounds\n");
+            exit(EXIT_SUCCESS);
         }
-        printf("Option :");
-        if (fgets(out,10,stdin)==NULL){
-            return 0;
-        }
-        if (memcmp(out,"\n ",1) !=0 &&memcmp(out,"",1)!=0){
-            printf("\n");
-            c=atoi(out);
-            if (c >=0 && c<=9 ){
-                menu[c].action();
-            }
-            else{
-                fprintf(stderr,"Not within bounds\n");
-            }
-        }
+
+
     }
+}
+int main() {
+    menu_func();
     return 0;
 }
+
