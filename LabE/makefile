@@ -1,4 +1,4 @@
-#
+
 #all: myElf
 #
 #myElf: myElf_mine.c
