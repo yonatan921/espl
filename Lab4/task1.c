@@ -16,12 +16,19 @@ void toggleDebugMode(state* s);
 void setFileName(state* s);
 void setUnitSize(state* s);
 void quit(state* s);
-void notImplemented(state* s);
 static char* hex_formats[] = {"%#hhx\n", "%#hx\n", "No such unit", "%#x\n"};
 static char* dec_formats[] = {"%#hhd\n", "%#hd\n", "No such unit", "%#d\n"};
+
+
+
 void toggleDebugMode(state* s) {
     s->debug_mode = !(s->debug_mode);
-    printf("Debug flag now %s\n", s->debug_mode ? "on" : "off");
+    if(s->debug_mode){
+        printf("Debug flag now on\n");
+    } else{
+        printf("Debug flag now off\n");
+    }
+
 }
 
 void setFileName(state* s) {
@@ -47,11 +54,13 @@ void setUnitSize(state* s) {
 }
 
 void loadIntoMemory(state* s) {
+    // check if file name is empty
     if (strcmp(s->file_name, "") == 0) {
         printf("Error: file name is empty.\n");
         return;
     }
 
+    //open file name
     FILE *file = fopen(s->file_name, "rb");
     if (!file) {
         printf("Error: unable to open file %s.\n", s->file_name);
@@ -60,12 +69,14 @@ void loadIntoMemory(state* s) {
 
     printf("Please enter <location> <length>: ");
     char input[100];
-    unsigned int location, length;
+    int location, length;
     fgets(input, sizeof(input), stdin); // Read the entire line
     sscanf(input, "%x %u", &location, &length); // Parse location as hex and length as decimal
 
+
+
     if (s->debug_mode) {
-        printf("Debug: file_name = %s, location = %X, length = %u\n", s->file_name, location, length);
+        fprintf(stderr,"Debug: file_name = %s, location = %X, length = %u\n", s->file_name, location, length);
     }
 
     fseek(file, location, SEEK_SET);
@@ -80,6 +91,7 @@ void loadIntoMemory(state* s) {
 }
 
 void toggleDisplayMode(state* s) {
+    //change display mode
     s->display_mode = !(s->display_mode);
     if (s->display_mode) {
         printf("Display flag now on, hexadecimal representation\n");
@@ -89,7 +101,8 @@ void toggleDisplayMode(state* s) {
 }
 
 void memoryDisplay(state* s) {
-    unsigned int address, length;
+//    unsigned int address, length;
+    int address, length;
     printf("Enter address and length: ");
     scanf("%x %u", &address, &length); // Address in hex, length in decimal
     unsigned char* start ;
@@ -99,9 +112,15 @@ void memoryDisplay(state* s) {
         start = (unsigned char*)address;
     }
 
-    printf("%s\n", s->display_mode ? "Hexadecimal" : "Decimal");
-    for (unsigned int i = 0; i < length; ++i) {
-        unsigned int val = 0;
+    if(s->display_mode){
+        printf("%s\n", "Hexadecimal" );
+    }
+    else{
+        printf("%s\n", "Decimal" );
+
+    }
+    for (int i = 0; i < length; ++i) {
+        int val = 0;
         memcpy(&val, start + i * s->unit_size, s->unit_size); // Copy unit_size bytes to val
         if (s->display_mode) {
             // Hexadecimal
@@ -117,48 +136,49 @@ void memoryDisplay(state* s) {
 void SaveIntoFile(state* s){
     FILE* file = fopen(s->file_name, "r+");
     printf("Please enter <source-address> <target-location> <length>: ");
-    int source_address = 0;
-    int target_location = 0;
+    int address = 0;
+    int location = 0;
     int length = 0;
-    scanf("%x %x %d", &source_address, &target_location, &length);
+    scanf("%x %x %d", &address, &location, &length);
+    // Set file indicator to the end
     fseek(file, 0L, SEEK_END);
-    if (target_location > ftell(file)){
+    //check if file indicator oob
+    if (location > ftell(file)){
         printf("Out of file bounds");
         return;
     }
-    fseek(file, 0, SEEK_SET);
-    fseek(file, target_location, SEEK_SET);
-    if (source_address == 0)
+//    fseek(file, 0, SEEK_SET);
+    fseek(file, location, SEEK_SET);
+    if (address == 0)
     {
+        //write for membuf
         fwrite(&s->mem_buf, s->unit_size, length, file);
     }
     else{
-        fwrite(&source_address, s->unit_size, length, file);
+        // write form given address
+        fwrite(&address, s->unit_size, length, file);
     }
     fclose(file);
 }
 
 void MemoryModify(state* s){
-    printf("Please enter <location> <val> \n");
+    printf("Please enter <location> <value> \n");
     int location = 0;
-    int val = 0;
-    scanf("%x %x", &location, &val);
+    int value = 0;
+    scanf("%x %x", &location, &value);
     if (s->debug_mode){
-        printf("Debug: location = %x, val = %x\n",  location, val);
+        printf("Debug: location = %x, value = %x\n", location, value);
     }
-    memcpy(&s->mem_buf[location],&val,s->unit_size);
+    memcpy(&s->mem_buf[location], &value, s->unit_size);
+    printf("%s", s->mem_buf);
 }
 
 
 void quit(state* s) {
     if (s->debug_mode) {
-        printf("quitting\n");
+        fprintf(stderr,"quitting\n");
     }
     exit(0);
-}
-
-void notImplemented(state* s) {
-    printf("Not implemented yet\n");
 }
 
 
@@ -175,29 +195,29 @@ struct fun_desc menu[] = {
         {"Load Into Memory", loadIntoMemory},
         {"Toggle Display Mode", toggleDisplayMode},
         {"Memory Display", memoryDisplay},
-        {"Save Into File", notImplemented},
-        {"Memory Modify", notImplemented},
+        {"Save Into File", SaveIntoFile},
+        {"Memory Modify", MemoryModify},
         {"Quit", quit},
         {NULL, NULL}
 };
 
 
 void menu_func(state* s) {
-    int userChoice;
+    int choice;
     int menuSize = sizeof(menu) / sizeof(menu[0]) - 1;
     while (1) {
-        printf("\nPlease choose a function (0-%d):\n\n", menuSize - 1);//Tb4
+        printf("\nPlease choose a function (0-%d):\n\n", menuSize - 1);
         for (int i = 0; menu[i].name != NULL; i++) {
             printf("%d) %s function.\n", i, menu[i].name);
         }
-        scanf("%d",&userChoice);
+        scanf("%d",&choice);
         fgetc(stdin);
-        if(userChoice==EOF){
+        if(choice == EOF){
             exit(EXIT_SUCCESS);
         }
 
-        if (userChoice >= 0 && userChoice < menuSize) {
-            menu[userChoice].fun(s);
+        if (choice >= 0 && choice < menuSize) {
+            menu[choice].fun(s);
             printf("\n");
         } else {
             exit(EXIT_SUCCESS);
