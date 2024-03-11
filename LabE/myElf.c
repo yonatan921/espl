@@ -502,21 +502,21 @@ void merge_elf_files(){
             fwrite((char*)(map_start1 + sh1[sectionIndex].sh_offset), 1, sh1[sectionIndex].sh_size, union_output);
         } else if (strcmp(comp, ".rodata") == 0 || strcmp(comp, ".data") == 0 || strcmp(comp, ".text") == 0) {
             fwrite((char*)(map_start1 + sh1[sectionIndex].sh_offset), 1, sh1[sectionIndex].sh_size, union_output);
-            Elf32_Shdr* section = NULL;
+            Elf32_Shdr* sec = NULL;
             // Nested Loop for finding matching section in file2
             int matchingSectionIndex = 0;
             while(matchingSectionIndex < header2->e_shnum) {
                 if (strcmp((char*)(map_start2 + sh2[header2->e_shstrndx].sh_offset) + sh2[matchingSectionIndex].sh_name, comp) == 0) {
-                    section = &sh2[matchingSectionIndex];
+                    sec = &sh2[matchingSectionIndex];
                     break;
                 }
                 matchingSectionIndex++;
             }
 
-            if (section != NULL) {
-                unionsh1[sectionIndex].sh_size += section->sh_size;
+            if (sec != NULL) {
+                unionsh1[sectionIndex].sh_size += sec->sh_size;
                 unionsh1[sectionIndex].sh_offset = ftell(union_output); // Adjust the offset before writing additional data
-                fwrite((char*)(map_start2 + section->sh_offset), 1, section->sh_size, union_output);
+                fwrite((char*)(map_start2 + sec->sh_offset), 1, sec->sh_size, union_output);
             }
         } else if (strcmp(comp, ".symtab") == 0) {
             fwrite((char*)symbol1, 1, size_symtable1 * sizeof(Elf32_Sym), union_output);
@@ -530,18 +530,12 @@ void merge_elf_files(){
         sectionIndex++;
     }
 
-
-    // Update the offset in the output file
-    const int OFFSET_POSITION = 32;
+    const int OFFSET_POS_FILE = 32;//The position of the offset in the file
+    char offset_buff[sizeof(int)];
     int offset = ftell(union_output);
-
-    char offsetBuffer[sizeof(int)];
-    memcpy(offsetBuffer, &offset, sizeof(int));
-
-    // Write the offset at the specified position in the file
-    fseek(union_output, OFFSET_POSITION, SEEK_SET);
-    fwrite(offsetBuffer, sizeof(char), sizeof(int), union_output);
-
+    memcpy(offset_buff, &offset, sizeof(int));//Copy the offset to the buffer
+    fseek(union_output, OFFSET_POS_FILE, SEEK_SET);//Set the position to the offset position
+    fwrite(offset_buff, sizeof(char), sizeof(int), union_output);
     fclose(union_output);
 }
 
