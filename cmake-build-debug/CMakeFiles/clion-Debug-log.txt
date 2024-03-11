@@ -1,1 +1,1 @@
-CMakeLists.txt not found in /home/tipsho/CLionProjects/espl Select CMakeLists.txt
+CMakeLists.txt not found in /home/caspl202/CLionProjects/espl Select CMakeLists.txt
