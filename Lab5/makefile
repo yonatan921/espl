@@ -1,20 +1,24 @@
+all: loader
+loader : loader.o startup.o start.o
+	ld -o loader loader.o startup.o start.o -L/usr/lib32 -lc -T linking_script -dynamic-linker /lib32/ld-linux.so.2
 
-all: task0 task1 task2
+loader.o: loader.c
+	gcc -m32 -c loader.c -o loader.o
 
-task0: task0.c
-	gcc -m32 -g -o task0 task0.c
+start: start.o
+	 gcc -g -m32 -Wall -o start start.o
 
-task1: task1.c
-	gcc -m32 -g -o task1 task1.c
 
-task2: task2.o
-	gcc -m32 -c task2.c -o task2.o
-	ld -o task2 task2.o startup.o start.o -L/usr/lib32 -lc -T linking_script -dynamic-linker /lib32/ld-linux.so.2
+start.o: start.s
+	nasm -g -f elf -w+all -o start.o start.s
 
-task2.o: task2.c
-	gcc -g -Wall -m32 -c -o task2.o task2.c
-	nasm -f elf32 start.s -o start.o
-	nasm -f elf32 startup.s -o startup.o
+startup: startup.o
+	 gcc -g -m32 -Wall -o startup startup.o
+
+
+startup.o: startup.s
+	nasm -g -f elf -w+all -o startup.o startup.s
+
 
 clean:
-	rm -f *.o task0 task1 task2
+	rm -f *.o loader
