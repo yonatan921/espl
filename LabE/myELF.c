@@ -11,8 +11,8 @@ int debug_mode = 0;//0 for off, 1 for on
 int fd1=-1,fd2=-1;//file descriptor
 int amount_of_symbols1=-1 ,amount_of_symbols2=-1;
 void* map_start1=NULL,*map_start2=NULL; //pointer to the mapped file
-struct stat stat1, stat2;
-Elf32_Ehdr *header1 = NULL ,*header2 = NULL;
+struct stat stat1, stat2;//file information
+Elf32_Ehdr *header1 = NULL ,*header2 = NULL;//pointer to the header of the ELF file
 
 
 void examine_elf_file();

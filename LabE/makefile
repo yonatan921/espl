@@ -1,10 +1,9 @@
 
-all: myElf
+all: myELF
 
-myElf: myElf.c
-	gcc -m32 -g -o myElf myElf.c
-
+myELF: myELF.c
+	gcc -m32 -g -o myELF myELF.c
 
 clean:
-	rm -rf myElf
+	rm -rf myELF
 
