@@ -70,22 +70,22 @@ void print_examine_inf(int num){
 
 void examine_elf_file(){
 
-    printf("Enter the ELF file name:  ");
-    char buff[100];
-    char filename[100];
-    fgets(buff, 100, stdin);
-    sscanf(buff, "%s", filename);
+    printf("Please enter the file name:\n");
+    char buffer[100];
+    char file_name[100];
+    fgets(buffer, 100, stdin);
+    sscanf(buffer, "%s", file_name);
 
 
     if (fd1 != -1 &&fd2 != -1) {
-        printf("ExamineELFFile:Cannot examine more than 2 ELF files.\n");
+        printf("Error: Cannot examine ELF file - already two ELF files.\n");
         return;
     }
 
     if (fd1==-1){
-        fd1 = open(filename, O_RDWR);
+        fd1 = open(file_name, O_RDWR);
         if (fd1 == -1) {
-            printf("Error: cannot open file %s\n", filename);
+            printf("Error: cannot open file %s\n", file_name);
             return;
         }
        //The fstat function usually takes a file descriptor as an argument and fills a structure with the file's information.
@@ -122,9 +122,9 @@ void examine_elf_file(){
     }
     else
     {
-        fd2 = open(filename, O_RDWR);
+        fd2 = open(file_name, O_RDWR);
         if (fd2 == -1) {
-            printf("Error: cannot open file %s\n", filename);
+            printf("Error: cannot open file %s\n", file_name);
             return;
         }
         //The fstat function usually takes a file descriptor as an argument and fills a structure with the file's information.
@@ -250,7 +250,7 @@ void print_section_names(){
 
 void print_symbols() {
     if (fd1 == -1 && fd2 == -1) {
-        printf("PrintSymbols :Cannot Print Symbols- no ELF files.\n");
+        printf("Error: Couldn't print symbols - no ELF files.\n");
         return;
     }
     if (fd1 != -1) {
